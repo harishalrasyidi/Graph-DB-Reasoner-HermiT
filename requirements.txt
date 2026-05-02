@@ -1,0 +1,6 @@
+# ─── Requirements untuk demo OWL → Neo4j ───────────────────────
+# Install dengan: pip install -r requirements.txt
+
+owlready2>=0.46      # Load + reasoning OWL ontology (butuh Java JRE 8+)
+neo4j>=5.0           # Python driver untuk Neo4j
+rdflib>=6.0          # for Turtle/N3 -> RDF/XML conversion
