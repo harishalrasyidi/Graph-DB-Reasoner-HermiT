@@ -306,27 +306,46 @@ def save_class_hierarchy(session, onto, source_tag: str):
     """
     Simpan hierarki class sebagai node :OWLClass dengan relasi :SCO
     (Subclass Of). Membantu visualisasi di Neo4j Browser.
+    
+    Catatan: iterasi semua classes dan ALL parents (termasuk indirect via 
+    INDIRECT_is_a untuk capture super-superclasses).
     """
     step(f"Menyimpan class hierarchy (source={source_tag})...")
-    for cls in onto.classes():
+    
+    all_classes = list(onto.classes())
+    info(f"Total {len(all_classes)} classes ditemukan di ontologi")
+    
+    # Langkah 1: Buat semua class nodes
+    for cls in all_classes:
         session.run(
             "MERGE (c:OWLClass {name: $name, source: $source})",
             name=cls.name,
             source=source_tag,
         )
-        for parent in cls.is_a:
-            if isinstance(parent, ThingClass) and parent.name != "Thing":
-                session.run(
-                    """
-                    MATCH (child:OWLClass  {name: $child,  source: $source})
-                    MATCH (parent:OWLClass {name: $parent, source: $source})
-                    MERGE (child)-[:SCO]->(parent)
-                    """,
-                    child=cls.name,
-                    parent=parent.name,
-                    source=source_tag,
-                )
-                info(f"  (:OWLClass {cls.name})-[:SCO]->(:OWLClass {parent.name})")
+        info(f"  ✓ Created :OWLClass {cls.name}")
+    
+    # Langkah 2: Buat semua SCO relationships
+    sco_count = 0
+    for cls in all_classes:
+        # Gunakan INDIRECT_is_a untuk capture semua ancestors (closure penuh)
+        for parent in cls.INDIRECT_is_a:
+            if isinstance(parent, ThingClass) and parent.name not in ("Thing",):
+                # Hindari duplikasi langsung: hanya buat relasi ke direct parents
+                if parent in cls.is_a:
+                    session.run(
+                        """
+                        MATCH (child:OWLClass  {name: $child,  source: $source})
+                        MATCH (parent:OWLClass {name: $parent, source: $source})
+                        MERGE (child)-[:SCO]->(parent)
+                        """,
+                        child=cls.name,
+                        parent=parent.name,
+                        source=source_tag,
+                    )
+                    info(f"  (:OWLClass {cls.name})-[:SCO]->(:OWLClass {parent.name})")
+                    sco_count += 1
+    
+    info(f"Total {sco_count} SCO relationships dibuat")
 
 
 def query_demo(session, source_tag: str):
